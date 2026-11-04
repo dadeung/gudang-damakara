@@ -31,12 +31,12 @@ paths:
           content:
             application/json:
               schema:
-              type: object
-              required: [data]
-              properties:
-                data:
-                  type: array
-                  items:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                   type: array
+                   items:
                     $ref: '#/components/schemas/ProdukList'
     post:
       tags: [Produk]
