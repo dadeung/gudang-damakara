@@ -42,10 +42,8 @@ class ProdukController extends Controller {
 
     public function store(Request $request) {
         $validated = $request->validate([
-            'sku' => ['required', 'string', 'regex:/^[A-Z]{3}\d{4}-[A-Z]$/', 'unique:produk,sku'],
+            'sku' => ['required', 'string', 'regex:/^[A-Z0-9-]{3,15}$/', 'unique:produk,sku'],
             'nama' => ['required', 'string', 'max:120'],
-            'size' => ['nullable', 'string'],
-            'warna' => ['nullable', 'string'],
             'harga' => ['required', 'integer', 'min:0'],
         ]);
 
@@ -116,7 +114,7 @@ class ProdukController extends Controller {
             ]]);
 
         } catch (StokTidakCukup $e) {
-            return Problem::response($request, 404, 'stok-tidak-cukup', 'Stok tidak cukup', $e->getMessage());
+            return Problem::response($request, 409, 'stok-tidak-cukup', 'stok tidak cukup', $e->getMessage());
         }
     }
 }

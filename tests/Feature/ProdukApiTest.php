@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Produk;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -68,10 +69,11 @@ class ProdukApiTest extends TestCase
 
     public function test_penyesuaian_stok_mengubah_stok(): void
     {
-        $produk = $this->produkContoh(10);
+        $this->withoutExceptionHandling();
+        $this->produkContoh(stok: 10);
 
-        $this->postJson("/api/v1/produk/{$produk->sku}/penyesuaian-stok", [
-            'id_referensi' => uuid_create(),
+        $this->postJson("/api/v1/produk/GKM0003-S/penyesuaian-stok", [
+            'id_referensi' => '3fa85f64-5717-4562-b3fc-2c963f66afa6',
             'perubahan' => -3,
             'alasan' => 'Penjualan',
         ])
@@ -81,10 +83,11 @@ class ProdukApiTest extends TestCase
 
     public function test_pengurangan_melebihi_stok_ditolak_dengan_409(): void
     {
-        $produk = $this->produkContoh(3);
+        $this->withoutExceptionHandling();
+        $this->produkContoh(stok: 3);
 
-        $this->postJson("/api/v1/produk/{$produk->sku}/penyesuaian-stok", [
-            'id_referensi' => uuid_create(),
+        $this->postJson("/api/v1/produk/GKM0003-S/penyesuaian-stok", [
+            'id_referensi' => '3fa85f64-5717-4562-b3fc-2c963f66cfa6',
             'perubahan' => -15,
             'alasan' => 'Penjualan',
         ])
@@ -92,6 +95,6 @@ class ProdukApiTest extends TestCase
             ->assertHeader('Content-Type', 'application/problem+json')
             ->assertJsonPath('type', 'https://damakara.test/problem/stok-tidak-cukup');
         
-        
+        $this->assertSame(3, Produk::where('sku', 'GKM0003-S')->value('stok'));
     }
 }
