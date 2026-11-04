@@ -1,0 +1,282 @@
+openapi: 3.1.0
+info:
+  title: Layanan Stok — Gudang Damakara
+  version: 1.0.0
+  contact:
+    name: Kelompok Pantastik Por
+    email: pantastikpor@damakara.test
+  description: |
+    Kontrak API untuk membaca katalog produk dan menyesuaikan stok.
+    Dipakai oleh kasir toko fisik, admin WhatsApp, dan sinkronisasi marketplace.
+    Semua galat dikembalikan dalam format Problem Details (RFC 9457).
+
+servers:
+  - url: http://localhost/api
+    description: Lingkungan Pengembangan Lokal (Laravel Sail)
+
+tags:
+  - name: Produk
+    description: Katalog produk dan stok
+
+paths:
+  /v1/produk:
+    get:
+      tags: [Produk]
+      operationId: daftarProduk
+      summary: Menampilkan seluruh katalog produk
+      description: Mengembalikan seluruh produk di katalog, diurutkan menurut SKU.
+      responses:
+        '200':
+          description: Daftar produk berhasil diambil
+          content:
+            application/json:
+              schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProdukList'
+    post:
+      tags: [Produk]
+      operationId: tambahProduk
+      summary: Menambahkan produk baru ke katalog
+      description: SKU harus unik. Bila `stok` tidak dikirim, stok awal dianggap 0.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TambahProdukRequest'
+      responses:
+        '201':
+          description: Produk berhasil dibuat
+          headers:
+            Location:
+              description: URL produk yang baru dibuat
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProdukTunggal'
+        '422':
+          $ref: '#/components/responses/ValidasiGagal'
+  /v1/produk/{sku}:
+    parameters:
+      - $ref: '#/components/parameters/Sku'
+    get:
+      tags: [Produk]
+      operationId: lihatProduk
+      summary: Menampilkan detail produk
+      description: Mengembalikan detail produk yang sesuai SKU.
+      responses:
+        '200':
+          description: Detail produk berhasil diambil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProdukTunggal'
+        '404':
+          $ref: '#/components/responses/ProdukTidakDitemukan'
+  /v1/produk/{sku}/penyesuaian-stok:
+    parameters:
+      - $ref: '#/components/parameters/Sku'
+    post:
+      tags: [Produk]
+      operationId: sesuaikanStok
+      summary: Menyesuaikan stok produk
+      description: |
+        Menyesuaikan stok produk dengan menambahkan atau mengurangi jumlah tertentu.
+        Jumlah penyesuaian dapat berupa bilangan positif (untuk menambah stok)
+        atau bilangan negatif (untuk mengurangi stok). Pengurangan yang menyebabkan stok akhir 
+        menjadi negatif akan otomatis ditolak dengan status 409.
+        Pola dikerjakan secara idempoten menggunakan parameter `id_referensi`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PenyesuaianStokRequest'
+      responses:
+        '200':
+          description: Penyesuaian stok berhasil dilakukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProdukTunggal'
+        '404':
+          $ref: '#/components/responses/ProdukTidakDitemukan'
+        '409':
+          description: Stok tidak cukup untuk pengurangan yang diminta
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://damakara.test/problem/stok-tidak-cukup
+                title: Stok tidak cukup
+                status: 409
+                detail: Stok GKM0003-S tinggal 3, tidak bisa dikurangi 5.
+                instance: /v1/produk/GKM0003-S/penyesuaian-stok
+        '422':
+          $ref: '#/components/responses/ValidasiGagal'
+
+components:
+  parameters:
+    Sku:
+      name: sku
+      in: path
+      required: true
+      description: Kode SKU unik produk Damakara (3-15 karakter alfanumerik)
+      schema:
+        type: string
+        pattern: '^[A-Z]{3}\d{4}-[A-Z]$'
+        example: GKM0003-S
+  schemas:
+    Produk:
+      type: object
+      required: [sku, nama, size, warna, harga, stok, tersedia, diperbarui_pada]
+      properties:
+        sku:
+          type: string
+          pattern: '^[A-Z]{3}\d{4}-[A-Z]$'
+          example: GKM0003-S
+        nama:
+          type: string
+          example: Kemeja Ciangi Gayatri T.Panjang
+        size:
+          type: string
+          example: S
+        warna:
+          type: string
+          example: Terracota
+        harga:
+          type: integer
+          minimum: 0
+          description: Harga dalam satuan Rupiah tanpa desimal
+          example: 185000
+        stok:
+          type: integer
+          minimum: 0
+          example: 25
+        tersedia:
+          type: boolean
+          description: Berstatus true jika stok > 0
+          example: true
+        diperbarui_pada:
+          type: string
+          format: date-time
+          example: '2026-11-04T10:15:30Z'
+    ProdukTunggal:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Produk'
+    ProdukList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Produk'
+    TambahProdukRequest:
+      type: object
+      required: [sku, nama, size, warna, harga]
+      properties:
+        sku:
+          type: string
+          pattern: '^[A-Z]{3}\d{4}-[A-Z]$'
+          description: Kode SKU unik produk Damakara (3-15 karakter alfanumerik)
+          example: GKM0003-S
+        nama:
+          type: string
+          description: Nama produk
+          example: Kemeja Ciangi Gayatri T.Panjang
+        size:
+          type: string
+          description: Ukuran produk
+          example: S
+        warna:
+          type: string
+          description: Warna produk
+          example: Terracota
+        harga:
+          type: integer
+          description: Harga dalam satuan Rupiah tanpa desimal
+          minimum: 0
+          example: 185000
+    PenyesuaianStokRequest:
+      type: object
+      required: [id_referensi, perubahan, alasan]
+      properties:
+        id_referensi:
+          type: string
+          format: uuid
+          description: ID referensi unik untuk penyesuaian stok (untuk idempoten)
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        perubahan:
+          type: integer
+          description: Jumlah penyesuaian stok (positif untuk menambah, negatif untuk mengurangi)
+          not:
+            const: 0
+          example: -5
+        alasan:
+          type: string
+          description: Alasan penyesuaian stok
+          enum: [Stok habis, Stok rusak, Penjualan, Retur, Restock, Lainnya]
+          example: Stok habis
+    Problem:
+      type: object
+      description: Problem Details sesuai RFC 9457
+      required: [type, title, status, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: URI yang mengidentifikasi jenis galat
+          example: https://damakara.test/problem/stok-tidak-cukup
+        title:
+          type: string
+          description: Judul singkat galat
+          example: Stok tidak cukup
+        status:
+          type: integer
+          description: Kode status HTTP
+          example: 409
+        detail:
+          type: string
+          description: Penjelasan lebih rinci tentang galat
+          example: Stok GKM0003-S tinggal 3, tidak bisa dikurangi 5.
+        instance:
+          type: string
+          format: uri-reference
+          description: URI yang mengidentifikasi instansi galat tertentu
+          example: /v1/produk/GKM0003-S/penyesuaian-stok
+        errors:
+          type: object
+          description: Daftar galat validasi
+          additionalProperties:
+            type: array
+            items:
+              type: string
+  responses:
+    ProdukTidakDitemukan:
+      description: Produk dengan SKU yang diminta tidak ditemukan
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://damakara.test/problem/produk-tidak-ditemukan
+            title: Produk tidak ditemukan
+            status: 404
+            detail: Produk dengan SKU GKM0003-S tidak ditemukan.
+            instance: /v1/produk/GKM0003-S
+    ValidasiGagal:
+      description: Validasi input gagal
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem' 
